@@ -168,7 +168,7 @@ col_names <- c('variance.p', 'risk.p', 'fixed.W.risk.p', 'fixed.YW.risk.p',
 
 for(i in seq(length(num))){
 
-    scenario_result <- foreach(i = seq(no_repeats), .combine = 'rbind') %dopar%  {
+    scenario_result <- foreach(j = seq(no_repeats), .combine = 'rbind') %dopar%  {
         
         data <- get(paste0('d', num[i]))
         
