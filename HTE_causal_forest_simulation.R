@@ -8,7 +8,7 @@ library(survminer)
 library(doParallel)
 library(randomForest)
 
-registerDoParallel(5)
+registerDoParallel(3)
 
 source('survival.imputation.R')  # load impute.survival function
 source('hte.validation.R')     # load validation methods for HTE
