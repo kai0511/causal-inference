@@ -266,16 +266,15 @@ for(i in seq(length(num))){
         trainId <- sample(1:no.obs, floor(no.obs/2), replace = F)
         
         fitted.models <- fit.cf.splited.datasets(covariates, imputed.Y, W, trainId)
-        
         # save(fitted.models, file = paste0('fitted.model', i, '.RData')) 
+
+        # validate fitting with correlation test, rank test, median test
         cor.obj.a <- cor.test(fitted.models[[1]]$predictions, fitted.models[[4]]$predictions, alternative = 'greater', method = 'pearson', use="na.or.complete")
         cor.obj.b <- cor.test(fitted.models[[2]]$predictions, fitted.models[[3]]$predictions, alternative = 'greater', method = 'pearson', use="na.or.complete")
         
         rank.cor.obj.a <- cor.test(fitted.models[[1]]$predictions, fitted.models[[4]]$predictions, alternative = 'greater', method = 'spearman', use="na.or.complete")
         rank.cor.obj.b <- cor.test(fitted.models[[2]]$predictions, fitted.models[[3]]$predictions, alternative = 'greater', method = 'spearman', use="na.or.complete")
         
-        
-
         t.test.pval.a <- median.t.test(fitted.models[[1]]$predictions, fitted.models[[4]]$predictions)
         t.test.pval.b <- median.t.test(fitted.models[[2]]$predictions, fitted.models[[3]]$predictions)
 
@@ -300,7 +299,6 @@ for(i in seq(length(num))){
         print(paste0('# ------------------------------ summary of false discovery rate ', num[i],' ---------------------------------------'))
         print_false_rate(test_names, false_rates)
     } 
-
     write.csv(scenario_result, paste0('scenario_', num[i], '_result.csv'), quote = F, row.names = F)
 
 }
