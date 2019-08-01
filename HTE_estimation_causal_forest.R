@@ -132,7 +132,7 @@ split_half_testing <- function(covariates, Y, treatment, no_repeats = 10, n_core
     return(aggregated_result)
 }
 
-run.hte <- function(mat, mutations, dataset, trainId, is.binary = TRUE, thres = 0.75, n_core = 8){
+run.hte <- function(mat, mutations, dataset, trainId, cancerType, is.binary = TRUE, thres = 0.75, n_core = 8){
     # @mat: covariates and treatment assigments, including gender, sex, and mutations etc. For treatment assignment,
     #   should be 0 or 1, can be derived by treating sigle or multiple gene mutation as treatment assigment
     # @mutations: a vector of mutations will be investigated.
@@ -296,7 +296,7 @@ run.hte <- function(mat, mutations, dataset, trainId, is.binary = TRUE, thres = 
     return(list(correlation.test.ret, calibration.ret, double.dataset.test.ret, permutate.testing.ret))
 }
 
-cancerType <- 'BRCA' # cancer type to be studied
+cancerType <- c('LUAD', 'LUSC') # cancer type to be studied
 mutation.threshold <- 50  # minimum number of mutation to be studied
 setwd("/exeh_3/kai/data/heterogenous_treatment_effects")
 
@@ -324,7 +324,7 @@ colnames(donorInfo) <- index
 patientInfo <-rbind(dataset, donorInfo)
 
 # specify cancer type here
-patientInfo <- subset(patientInfo, type == cancerType)
+patientInfo <- subset(patientInfo, type %in% cancerType)
 surv.times <- as.numeric(as.character(patientInfo$PFI.time))
 cens <- as.numeric(patientInfo$censor)
 
@@ -382,7 +382,7 @@ trainId <- sample(1: obsNumber, floor(obsNumber/2), replace = FALSE)
 # trainId <- grep('TCGA', dataset$donorId)
 
 # run causal forests model
-result <- run.hte(mutation.mat, freq.mutations, merged.dataset, trainId)
+result <- run.hte(mutation.mat, freq.mutations, merged.dataset, trainId, 'LUNG')
 write.csv(result[[1]], paste0('mutation_result/', cancerType, '/', cancerType, '.mutation.correlation.test.result.csv'), quote = F, row.names = F)
 write.csv(result[[2]], paste0('mutation_result/', cancerType, '/', cancerType, '.mutation.calibration.result.csv'), quote = F, row.names = F)
 write.csv(result[[3]], paste0('mutation_result/', cancerType, '/', cancerType, '.mutation.median.t.test.result.csv'), quote = F, row.names = F)
