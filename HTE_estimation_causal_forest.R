@@ -100,11 +100,11 @@ split_half_testing <- function(covariates, Y, treatment, no_repeats = 10, n_core
         tau.b.train.stats <- compute_stats(tau.pred.train.b)
         tau.b.stats <- compute_stats(tau.pred.test.b)
 
-        simes_pval.a <- simes.test(tau.a.stats[[1]])
-        simes_pval.b <- simes.test(tau.b.stats[[1]])
+        simes_pval.a <- simes.test(tau.a.stats[[3]])
+        simes_pval.b <- simes.test(tau.b.stats[[3]])
 
-        partial_simes_pval.a <- simes.partial(floor(no.obs.test * 0.05), tau.a.stats[[1]])
-        partial_simes_pval.b <- simes.partial(floor(no.obs.train * 0.05), tau.b.stats[[1]])
+        partial_simes_pval.a <- simes.partial(floor(no.obs.test * 0.05), tau.a.stats[[3]])
+        partial_simes_pval.b <- simes.partial(floor(no.obs.train * 0.05), tau.b.stats[[3]])
 
         # check the correlation between two predictions from two datasets
         test_res.a <- correlation_test(tau.a.train.stats[[1]], tau.b.stats[[1]], methods = c('pearson', 'kendall', 'spearman'))
