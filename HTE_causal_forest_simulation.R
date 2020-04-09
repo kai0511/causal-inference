@@ -4,14 +4,13 @@ library(dplyr)
 library(data.table)
 library(survival)
 library(survminer)
-# library(mppa)
 library(doParallel)
-library(randomForest)
 
-registerDoParallel(3)
+registerDoParallel(1)
+args = commandArgs(trailingOnly=TRUE)
 
 source('survival.imputation.R')  # load impute.survival function
-source('hte.validation.R')     # load validation methods for HTE
+source('/exeh_3/kai/R.code/HTE/hte.validation.R')     # load validation methods for HTE
 source('simulation.scenarios.R') # load different simulation functions
 source('causal_inference_models.R')
 
@@ -27,14 +26,15 @@ randomized.tx <- function(n){
 }
 
 biased.tx <- function(mu.x, tau.x){
-    diff <- (mu.x - tau.x)/2
+    diff <- mu.x - tau.x/2
     probs <- exp(diff) / (1 + exp(diff))
-    tx <- sapply(probs, function(i) rbinom(1, size = 1, p = i))
+    # tx <- sapply(probs, function(i) rbinom(1, size = 1, p = i))
+    tx <- rbinom(length(mu.x), 1, probs)
     tx
 }
 
 generate.censored.outcome <- function(Y, event.rate){
-    cutoff <- quantile(Y, event.rate)
+    cutoff <- quantile(Y, 1 - event.rate)
     cen <- rexp(length(Y), rate = 1/cutoff)
     y.censored <- pmin(Y, cen)
     censor <- as.numeric(Y <= y.censored)
@@ -43,7 +43,7 @@ generate.censored.outcome <- function(Y, event.rate){
     return(res)
 }
 
-generate.scenario <- function(n, p, mu.fun, tau.fun, noise.sd = 1, randomized = TRUE, event.rate = 0.2){
+generate.scenario <- function(n, p, mu.fun, tau.fun, noise.sd = 1, randomized = TRUE, event.rate = 0.1){
     x <- generate.covariates(n, p)
 
     mu.x <- do.call(mu.fun, list(x))
@@ -75,74 +75,37 @@ generate.scenario <- function(n, p, mu.fun, tau.fun, noise.sd = 1, randomized = 
     return(d)
 }
 
-calculate_mean_surv <- function(rfsrv_obj){
-    step_surv <- cbind(rep(1, dim(rfsrv_obj$survival)[1]), rfsrv_obj$survival)
-    step_prob <- t(apply(step_surv, 1, function(x) -diff(x)))
-    mean_surv_pred <- step_prob %*% rfsrv_obj$time.interest
-    # mean_surv_pred <- step_prob %*% diff(c(0, rfsrv_obj$time.interest))
-    return(mean_surv_pred)
-}
+# original sample size: 600
+d1 <- generate.scenario(450, 400, 'f8', 'f1')
+d9 <- generate.scenario(450, 400, 'f8', 'f1', randomized = FALSE)
 
-calculate_surv_auc <- function(survival, time.interest){
-    step_surv <- cbind(rep(1, dim(survival)[1]), survival)
-    step_prob <- t(apply(step_surv, 1, function(x) (x[-1] + x[-length(x)])/2))
-    mean_surv_pred <- step_prob %*% diff(c(0, time.interest))
-    return(mean_surv_pred)
-}
+d2 <- generate.scenario(450, 400, 'f5', 'f2', noise.sd = 0.25)
+d10 <- generate.scenario(450, 400, 'f5', 'f2', noise.sd = 0.25, randomized = FALSE)
 
-integrate_surv_fun <- function(survival, time.interest){
-    step_surv <- cbind(rep(1, dim(survival)[1]), survival)
-    timeInterest <- c(0, time.interest)
-    meanSurv <- apply(step_surv, 1, function(x, timeInterest){ 
-        integrate.xy(timeInterest, x, use.spline= T)}, timeInterest = timeInterest)
-    return(meanSurv)
-}
+# original sample size: 700
+d3 <- generate.scenario(550, 300, 'f4', 'f3')
+d11 <- generate.scenario(550, 300, 'f4', 'f3', randomized = FALSE)
 
-fit.cf.splited.datasets <- function(covariates, Y, W, trainId){
-    tau.forest.train <- cf.tuned(covariates[trainId, ], Y[trainId], W[trainId], num_trees = 1000)   # run causal forests by default
-    tau.pred.train.a <- predict(tau.forest.train, newdata = NULL, estimate.variance = TRUE, num.threads = 8)
-    tau.pred.test.a <- predict(tau.forest.train, newdata = covariates[-trainId, ], estimate.variance = TRUE, num.threads = 8)
-   
-    tau.forest.test <- cf.tuned(covariates[-trainId, ], Y[-trainId], W[-trainId], num_trees = 1000)   # run causal forests by default
-    tau.pred.train.b <- predict(tau.forest.test, newdata = NULL, estimate.variance = TRUE, num.threads = 8)
-    tau.pred.test.b <- predict(tau.forest.test, newdata = covariates[trainId, ], estimate.variance = TRUE, num.threads = 8)
-    
-    fitted.models <- list(tau.pred.train.a, tau.pred.test.a, tau.pred.train.b, tau.pred.test.b)
-    return(fitted.models)
-}
+d4 <- generate.scenario(550, 300, 'f7', 'f4', noise.sd = 0.25)
+d12 <- generate.scenario(550, 300, 'f7', 'f4', noise.sd = 0.25, randomized = FALSE)
 
+# original sample size: 800
+d5 <- generate.scenario(600, 200, 'f3', 'f5')
+d13 <- generate.scenario(600, 200, 'f3', 'f5', randomized = FALSE)
 
-d1 <- generate.scenario(800, 400, 'f8', 'f1')
-d9 <- generate.scenario(800, 400, 'f8', 'f1', randomized = FALSE)
+d6 <- generate.scenario(600, 200, 'f1', 'f6')
+d14 <- generate.scenario(600, 200, 'f1', 'f6', randomized = FALSE)
 
-d2 <- generate.scenario(800, 400, 'f5', 'f2', noise.sd = 0.25)
-d10 <- generate.scenario(800, 400, 'f5', 'f2', noise.sd = 0.25, randomized = FALSE)
+# original sample size: 900
+d7 <- generate.scenario(700, 100, 'f2', 'f7', noise.sd = 4)
+d15 <- generate.scenario(700, 100, 'f2', 'f7', noise.sd = 4, randomized = FALSE)
 
-d3 <- generate.scenario(800, 300, 'f4', 'f3')
-d11 <- generate.scenario(800, 300, 'f4', 'f3', randomized = FALSE)
+d8 <- generate.scenario(700, 100, 'f6', 'f8', noise.sd = 4)
+d16 <- generate.scenario(700, 100, 'f6', 'f8', noise.sd = 4, randomized = FALSE)
 
-d4 <- generate.scenario(900, 300, 'f7', 'f4', noise.sd = 0.25)
-d12 <- generate.scenario(900, 300, 'f7', 'f4', noise.sd = 0.25, randomized = FALSE)
-
-d5 <- generate.scenario(900, 200, 'f3', 'f5')
-d13 <- generate.scenario(800, 200, 'f3', 'f5', randomized = FALSE)
-
-d6 <- generate.scenario(900, 200, 'f1', 'f6')
-d14 <- generate.scenario(900, 200, 'f1', 'f6', randomized = FALSE)
-
-d7 <- generate.scenario(1000, 100, 'f2', 'f7', noise.sd = 4)
-d15 <- generate.scenario(1000, 100, 'f2', 'f7', noise.sd = 4, randomized = FALSE)
-
-d8 <- generate.scenario(1000, 100, 'f6', 'f8', noise.sd = 4)
-d16 <- generate.scenario(1000, 100, 'f6', 'f8', noise.sd = 4, randomized = FALSE)
-
-num <- c(seq(1:8), seq(9, 16))
+# num <- c(seq(9, 1, -1), seq(16, 10, -1))
 # no_repeats <- 200
 # num <- c(rep(1, no_repeats), rep(9, no_repeats))
-
-print.correlation <- function(fitted.obj, type){
-    print(paste0('correlation of ', type,' in :', fitted.obj$estimate, ', its pvalues:', fitted.obj$p.value))
-}
 
 print_false_rate <- function(test_names, false_rates){
     num <- length(test_names)
@@ -152,65 +115,82 @@ print_false_rate <- function(test_names, false_rates){
     }
 }
 
-
-
 # --------------------------------------------------------------------------------------
-#
 # run simulation for each scenario for a number of times, defined by no_repeats below
 # collect simulation result wiht matrix and save it in local directory
-#
 # --------------------------------------------------------------------------------------
-no_repeats <- 200
-is_print <- FALSE
-col_names <- c('variance.p', 'risk.p', 'fixed.W.risk.p', 'fixed.YW.risk.p', 
-    'pearson.a.p', 'pearson.b.p', 'spearman.a.p', 'spearman.b.p', 'median.a.p', 'median.b.p')
 
+if (length(args)==0) {
+    stop("At least one argument must be supplied (input file).n", call.=FALSE)
+} else if (length(args)==1) {
+    cat('Scenario: ', args[1], '\n')
+}
+
+num <- as.numeric(args[1])
+no_repeats <- 500 
+verbose <- TRUE; is_tuned <- FALSE; is_save <- TRUE; seed <- NULL
+
+col_names <- c('simes.pval', 'partial.simes.pval', 'pearson.estimate','pearson.pvalue',
+               'kendall.estimate','kendall.pvalue', 'spearman.estimate','spearman.pvalue',
+               'fisher.pval', 't.test.a.pval', 't.test.b.pval') 
+calibration_test_names <- c('differential.estimate', 'differential.pvalue')
+perm_test_names <- c('variance.pval', 'fixed.YW.pval')
+
+cf.estimator <- ifelse(is_tuned, cf.tuned, cf)
 
 for(i in seq(length(num))){
+    
+    data <- get(paste0('d', num[i]))
+    
+    write.csv(data, file = paste0('scenario_', num[i], '_dataset.csv'), quote = FALSE, row.names = F)
+   
+    # remove rows containing NAs 
+    ind <- apply(data, 1, function(x) sum(is.na(x)) == 0)
+    data <- data[ind, ]
 
-    scenario_result <- foreach(j = seq(no_repeats), .combine = 'rbind') %dopar%  {
+    covariates <- data[, -c(1:5)]
+    real.Y <- data[, 1]
+    tau.real <- data[, 2]
+    W <- data[, 3]
+    imputed.Y <- data[, 4]
+    censor <- data[, 5]
+    sample_size <- dim(covariates)
+
+    scenario_result <- foreach(j = seq(no_repeats), .combine = 'rbind', .options.multicore = list(set.seed = T)) %do%  {
+        # set.seed(j)
+        file_prefix <- paste0('simulation_result/scenario_', num[i], '_repeat_', j)
         
-        data <- get(paste0('d', num[i]))
-        
-        # remove rows containing NAs 
-        ind <- apply(data, 1, function(x) sum(is.na(x)) == 0)
-        data <- data[ind, ]
-
-        covariates <- data[, -c(1:5)]
-        real.Y <- data[, 1]
-        tau.real <- data[, 2]
-        W <- data[, 3]
-        imputed.Y <- data[, 4]
-        censor <- data[, 5]   
-       
-
-        fitted.obj <- cf.tuned(covariates, imputed.Y, W, num_trees = 1000)
+        fitted.obj <- cf.estimator(covariates, imputed.Y, W, num_trees = 1000)
         tau.pred <- predict(fitted.obj, newdata = NULL, estimate.variance = TRUE, num.threads = 8)
-
+        
+        # print(fitted.obj[["tuning.output"]])
+        
         Y.hat <- fitted.obj[["Y.hat"]]
         W.hat <- fitted.obj[["W.hat"]]
 
         cf.risk = mean((tau.real - tau.pred$predictions)^2)
-        
-        permutated.p.val <- permutated.pval(tau.real, (W - W.hat) * tau.pred$predictions)
-     
+        tau.var <- var(tau.pred$predictions) 
+        permutated.p.val <- permutated.pval(tau.real, (W - W.hat) * tau.pred$predictions) 
         
         Y.hat <- fitted.obj[["Y.hat"]]
         tau.estimated <- imputed.Y - Y.hat
         
         cor.obj <- cor.test(tau.real, tau.pred$predictions, alternative = 'greater')
+        obs_calibration_pvals <- unname(test_calibration(fitted.obj)[2, c(1, 4)])
         risk <- mean((tau.real - tau.pred$predictions)^2)
 
-        if(is_print){
+        if(verbose){
             print(paste0('# ------------------------------ begin scenario ', num[i],' ---------------------------------------'))
             print(paste0('censor rate:', 1 - mean(censor)))
             print(paste0('risk fitted by CF in scenario ', num[i], ': ', cf.risk))
 
             # print(paste0('variance in scenario ', i, ': ', var(tau.real)))    
             # print(paste0('R square in scenario ', i, ': ', 1 - var(tau.real - tau.pred$predictions) / var(tau.real)))
-            print(paste0('p.val of permutating either real tau from simulation or (W - W.hat) * tau.pred$predictions in scenario ', num[i], ':', permutated.p.val))
-            print(paste0('The estimated measure of correlation between real tau and predicted tau in scenario ', num[i], ': ', cor.obj$estimate, '; its pval:', cor.obj$p.value ))
-            print(paste0('risk of mean squared difference between real tau and predicted tau value in scenario ', num[i], ': ', risk))
+            print(paste0('p.val of permutating either real tau or (W - W.hat) * tau.pred$predictions in scenario ', 
+                num[i], ':', permutated.p.val))
+            print(paste0('The estimated measure of correlation between real tau and predicted tau in scenario ', num[i], ': ', 
+                cor.obj$estimate, '; its pval:', cor.obj$p.value))
+            print(paste0('risk of mean squared difference between real tau and predicted tau value in scenario ', num[i], ':', risk))
         }
 
         # *****************************************************************************************
@@ -221,85 +201,85 @@ for(i in seq(length(num))){
         tau.2 <- (W - W.hat) * tau.pred$predictions
         permutated.p.val <- permutated.pval(tau.1, tau.2)
 
-        if(is_print){
+        if(verbose){
             print(paste0('p.val of permutating either (Y - Y.hat) or [(W - W.hat) * tau.pred$predictions] in scenario ', num[i], ':', permutated.p.val))
             print(test_calibration(fitted.obj))
         }
-        
-        
+       
+        calibration_pvalues <- unname(test_calibration(fitted.obj)[2, c(1, 4)]) 
+
         # print('# ------------------------ result of calibration by maunual regression -----------------------------------')
         # tau.bar <- mean(tau.pred$predictions)
         # pred.ret <- data.frame(outcome = tau.1, tau.diff = tau.pred$predictions - tau.bar, tau.avg = rep(tau.bar, length(tau.1)))
         # print(summary(lm(outcome ~ tau.diff + tau.avg + 0, data = pred.ret)))
-       
-        tau.risk <- assess.explained.tau.risk(fitted.obj, imputed.Y, W)
-        fixed.W.tau.risk <- assess.explained.tau.fixed.W.risk(fitted.obj, imputed.Y, W, W.hat)    
+         
+         
+        print('# ------------------------------ result of permutation covariates ---------------------------------------')
         fixed.YW.tau.risk <- assess.explained.tau.fixed.YW.risk(fitted.obj, imputed.Y, Y.hat, W, W.hat)    
-
-        perm.p.vals <- permutate.covariates.testing(covariates, imputed.Y, Y.hat, W, W.hat, tau.risk, fixed.W.tau.risk, fixed.YW.tau.risk, var(tau.pred$predictions), num_trees = 1000, num.strap = 500) 
+         
+        # perm.pvals <- permutate.covariates.testing(covariates, 
+        #                                            imputed.Y, 
+        #                                            Y.hat, 
+        #                                            W, W.hat, 
+        #                                            fixed.YW.tau.risk, 
+        #                                            tau.var, 
+        #                                            is_tuned = is_tuned,
+        #                                            is_save = is_save,
+        #                                            file_prefix = file_prefix,
+        #                                            num_trees = 1000, 
+        #                                            num.strap = 500) 
         
-        if(is_print){
-            print('# ------------------------------ result of permutation covariates ---------------------------------------')
-            print(paste0('p-values of variance testing by permutating covariates: ', perm.p.vals[1]))
-            print(paste0('p-values of tau risk by permutating covariates without fixing YW: ', perm.p.vals[2]))
-            print(paste0('p-values of tau risk by permutating covariates with fixing W: ', perm.p.vals[3]))
-            print(paste0('p-values of tau risk by permutating covariates with fixing YW: ', perm.p.vals[4]))
+        perm.pvals <- adaptive.permutate.covariates.testing(covariates, 
+                                                            imputed.Y, 
+                                                            Y.hat, 
+                                                            W, W.hat, 
+                                                            fixed.YW.tau.risk, 
+                                                            tau.var,
+                                                            is_tuned = is_tuned,
+                                                            is_save = is_save,
+                                                            file_prefix = file_prefix,
+                                                            num_trees = 1000, 
+                                                            num.strap = 500) 
+        if(verbose){
+            print(paste0('p-values of variance testing by permutating covariates: ', perm.pvals[1]))
+            print(paste0('p-values of tau risk by permutating covariates with fixing YW: ', perm.pvals[2]))
         }
-        
 
-        # *****************************************************************************************
-        # permutate treatment to validate HET esimation
-        # *****************************************************************************************
-        # Y.residual <- imputed.Y - Y.hat - tau.pred$predictions
-
-        # treatment.var <- var(Y.residual[W == 1])
-        # control.var <- var(Y.residual[W == 0])
-        # obs.t.var <- treatment.var/control.var
-
-        # perm.treament.pval <- permutate.treatment.testing(covariates, imputed.Y, W, obs.t.var, num_trees = 1000, num.strap = 500)
-        # print(paste0('p-values of t.var statistics by permutating W:', perm.treament.pval))
 
         # *****************************************************************************************
         # replication testing by spliting dataset into two pieces.
         # *****************************************************************************************
         no.obs <- dim(covariates)[1]
-        trainId <- sample(1:no.obs, floor(no.obs/2), replace = F)
-        
-        fitted.models <- fit.cf.splited.datasets(covariates, imputed.Y, W, trainId)
-        # save(fitted.models, file = paste0('fitted.model', i, '.RData')) 
+        # seed <- (j + floor(runif(1) * 888))
 
-        # validate fitting with correlation test, rank test, median test
-        cor.obj.a <- cor.test(fitted.models[[1]]$predictions, fitted.models[[4]]$predictions, alternative = 'greater', method = 'pearson', use="na.or.complete")
-        cor.obj.b <- cor.test(fitted.models[[2]]$predictions, fitted.models[[3]]$predictions, alternative = 'greater', method = 'pearson', use="na.or.complete")
-        
-        rank.cor.obj.a <- cor.test(fitted.models[[1]]$predictions, fitted.models[[4]]$predictions, alternative = 'greater', method = 'spearman', use="na.or.complete")
-        rank.cor.obj.b <- cor.test(fitted.models[[2]]$predictions, fitted.models[[3]]$predictions, alternative = 'greater', method = 'spearman', use="na.or.complete")
-        
-        t.test.pval.a <- median.t.test(fitted.models[[1]]$predictions, fitted.models[[4]]$predictions)
-        t.test.pval.b <- median.t.test(fitted.models[[2]]$predictions, fitted.models[[3]]$predictions)
+        pvalues <- split_half_testing(covariates, 
+                                      imputed.Y, W, 
+                                      binary = T, 
+                                      is_save = T, 
+                                      is_tuned = is_tuned,
+                                      file_prefix = file_prefix, 
+                                      col_names = col_names,
+                                      seed = seed)
 
-        if(is_print){
-            print.correlation(cor.obj.a, 'pearson')
-            print.correlation(cor.obj.b, 'pearson')
-            print.correlation(rank.cor.obj.a, 'spearman')
-            print.correlation(rank.cor.obj.b, 'spearman')
-            print(paste0('median test pval in trainset:', t.test.pval.a, '; corresponding pval in testset:', t.test.pval.b))
-        }
-        
-        # connect results for saving
-        correlation.res <- c(cor.obj.a$p.value, cor.obj.b$p.value, rank.cor.obj.a$p.value, rank.cor.obj.b$p.value, t.test.pval.a, t.test.pval.b)
-        c(perm.p.vals, correlation.res)
+        print(paste0('Fisher extact test pval in trainset:', pvalues[9]))
+        print(paste0('pearson correlation pval of tau predictionst:', pvalues[4])) 
+        print(paste0('spearman correlation pval of tau predictions in trainset:', pvalues[8]))
+        print(paste0('kendall correlation pval of tau predictions in trainset:', pvalues[6]))
+
+        # c(tau.var, fixed.YW.tau.risk, pvalues, NA, NA)
+        c(tau.var, fixed.YW.tau.risk, pvalues, calibration_pvalues, perm.pvals)
     }
+     
+    write.csv(scenario_result[, c(1, 2)], file = paste0('simulation_result/scenario_', num[i], '.observed.var.risk.csv'), quote = F, row.names = F)
 
+    colnames(scenario_result[, -c(1, 2)]) <- c(col_names, calibration_test_names, perm_test_names)
+    false_rates <- apply(scenario_result[, -c(1, 2)], 2, function(x) sum(x <= 0.05)/length(x))
     
-    colnames(scenario_result) <- col_names
-    false_rates <- apply(scenario_result, 2, function(x) sum(x <= 0.05)/length(x))
+    write.csv(scenario_result[, -c(1, 2)], paste0('scenario_', num[i], '_result.csv'), quote = F, row.names = F)
 
-    if(is_print){
+    if(verbose){
         print(paste0('# ------------------------------ summary of false discovery rate ', num[i],' ---------------------------------------'))
-        print_false_rate(test_names, false_rates)
+        print(paste0("dimension of sample size:", sample_size))
+        print_false_rate(col_names, false_rates)
     } 
-    write.csv(scenario_result, paste0('scenario_', num[i], '_result.csv'), quote = F, row.names = F)
-
 }
-write.csv(res, file = paste0('permutation.pvalues.csv'), quote = F, row.names = F)
